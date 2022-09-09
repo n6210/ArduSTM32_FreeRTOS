@@ -11,16 +11,23 @@ TaskHandle_t printHandle;
 TimerHandle_t xTimer = NULL;
 volatile uint32_t count = 0;
 volatile TickType_t xTime = configTICK_RATE_HZ;
+volatile uint32_t time = 0;
 
-static void vTimeCB(UNUSED TimerHandle_t xTimer) {
-  static uint32_t time = 0;
+static void print_time(void) {
   uint8 s = time % 60;
   uint8 m = (time / 60) % 60;
   uint16 h = (time / 3600) % 3600;
-  time += 0xF;
-  printf("Time: %02d:%02d:%02d\n", h, m, s);
-  if (time >= 0xFFFFFFF0)
-    vTaskEndScheduler();
+
+  printf("Time: %02d:%02d:%02d\n\n", h, m, s);
+}
+
+static void vTimeCB(UNUSED TimerHandle_t xTimer) {
+  time++;
+
+  if (time == 0) {
+    printf("Suspend shedule\n");
+    vTaskSuspendAll();
+  }
 }
 
 static void vIncTimerCB(UNUSED TimerHandle_t xTimer) {
@@ -47,6 +54,7 @@ static void vClrTask(UNUSED void *pvParameters) {
   while (1) {
     xTaskNotifyAndQuery(printHandle, count, eSetValueWithOverwrite, NULL);
     count = 0;
+    print_time();
     vTaskDelay(configTICK_RATE_HZ);
   }
 }
@@ -105,7 +113,7 @@ void setup() {
       Serial.print(F("Timer is not started"));
     }
   }
-  TimerHandle_t xTimeCnt = xTimerCreate("Time", configTICK_RATE_HZ / 10, pdTRUE, NULL, vTimeCB);
+  TimerHandle_t xTimeCnt = xTimerCreate("Time", configTICK_RATE_HZ / 50, pdTRUE, NULL, vTimeCB);
   if (xTimeCnt != NULL) {
     xTimerStart(xTimeCnt, 0);
   }

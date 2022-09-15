@@ -71,7 +71,7 @@ static void vPrintTask(UNUSED void *pvParameters) {
   }
 }
 
-// Interrupt handler - 
+// Interrupt handler -
 void interruptHandler(void) {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
@@ -112,30 +112,36 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(INPUT_PIN), interruptHandler, FALLING);
   }
 
+  // Create timer to change LED frequency
   xTimer = xTimerCreate("IncTimer", pdMS_TO_TICKS(3000), pdTRUE, NULL, vIncTimerCB);
   if (xTimer != NULL) {
     if (xTimerStart(xTimer, 0) != pdPASS) {
       Serial.print(F("Timer is not started"));
     }
   }
+
+  // Create timer to count time
   TimerHandle_t xTimeCnt = xTimerCreate("Time", configTICK_RATE_HZ, pdTRUE, NULL, vTimeCB);
   if (xTimeCnt != NULL) {
     xTimerStart(xTimeCnt, 0);
   }
 
+  // System start
   vTaskStartScheduler();
 }
+
 // Will be run inside the IdleTask
 void loop() {
   count++;
 }
 
 extern "C" {
-// Run loop() in a background
-   void vApplicationIdleHook(void) {
+  // Run loop() in a background
+  void vApplicationIdleHook(void) {
     loop();
   }
 
+  // Define putchar for printf()
   int _putchar(char c) {
     return Serial.print(c);
   }

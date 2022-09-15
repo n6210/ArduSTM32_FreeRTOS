@@ -11,25 +11,24 @@ TaskHandle_t printHandle;
 TimerHandle_t xTimer = NULL;
 volatile uint32_t count = 0;
 volatile TickType_t xTime = configTICK_RATE_HZ;
-volatile uint32_t time = 0;
+volatile uint32_t lTime = 0;
 
 static void print_time(void) {
-  uint8 s = time % 60;
-  uint8 m = (time / 60) % 60;
-  uint16 h = (time / 3600) % 3600;
+  taskENTER_CRITICAL();
+  uint8 s = lTime % 60;
+  uint8 m = (lTime / 60) % 60;
+  uint16 h = (lTime / 3600) % 3600;
+  taskEXIT_CRITICAL();
 
-  printf("Time: %02d:%02d:%02d\n\n", h, m, s);
+  printf("Time: %02d:%02d:%02d\n", h, m, s);
 }
 
+// Timer callback
 static void vTimeCB(UNUSED TimerHandle_t xTimer) {
-  time++;
-
-  if (time == 0) {
-    printf("Suspend shedule\n");
-    vTaskSuspendAll();
-  }
+  lTime++;
 }
 
+// Timer callback
 static void vIncTimerCB(UNUSED TimerHandle_t xTimer) {
   static uint32 freq = 0;
 
@@ -40,9 +39,10 @@ static void vIncTimerCB(UNUSED TimerHandle_t xTimer) {
   xTime = (configTICK_RATE_HZ / freq) / 2;
   taskEXIT_CRITICAL();
 
-  printf("Gen f=%lu (%lu)\n", freq, xTime);
+  //printf("Gen f=%lu (%lu)\n", freq, xTime);
 }
 
+// Task - freq gen
 static void vGenTask(UNUSED void *pvParameters) {
   while (1) {
     vTaskDelay(xTime);
@@ -50,6 +50,7 @@ static void vGenTask(UNUSED void *pvParameters) {
   }
 }
 
+// Task - send data and clear counter
 static void vClrTask(UNUSED void *pvParameters) {
   while (1) {
     xTaskNotifyAndQuery(printHandle, count, eSetValueWithOverwrite, NULL);
@@ -59,6 +60,7 @@ static void vClrTask(UNUSED void *pvParameters) {
   }
 }
 
+// Task - print recive data and print counter value
 static void vPrintTask(UNUSED void *pvParameters) {
   uint32_t val = 0;
 
@@ -69,15 +71,17 @@ static void vPrintTask(UNUSED void *pvParameters) {
   }
 }
 
+// Interrupt handler - 
 void interruptHandler(void) {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-  count++;
+  //count++;
   xSemaphoreGiveFromISR(interruptSemaphore, &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   //xTaskNotifyFromISR(printHandle, count, eSetBits, &xHigherPriorityTaskWoken);
 }
 
+// Task - blink LED according to the input
 static void vLedTask(UNUSED void *pvParameters) {
   while (1) {
     if (xSemaphoreTake(interruptSemaphore, portMAX_DELAY) == pdPASS) {
@@ -86,6 +90,7 @@ static void vLedTask(UNUSED void *pvParameters) {
   }
 }
 
+// General setup
 void setup() {
   // initialize the digital pin as an output:
   pinMode(LED_BUILTIN, OUTPUT);
@@ -113,17 +118,24 @@ void setup() {
       Serial.print(F("Timer is not started"));
     }
   }
-  TimerHandle_t xTimeCnt = xTimerCreate("Time", configTICK_RATE_HZ / 50, pdTRUE, NULL, vTimeCB);
+  TimerHandle_t xTimeCnt = xTimerCreate("Time", configTICK_RATE_HZ, pdTRUE, NULL, vTimeCB);
   if (xTimeCnt != NULL) {
     xTimerStart(xTimeCnt, 0);
   }
 
   vTaskStartScheduler();
 }
-
-void loop() {}
+// Will be run inside the IdleTask
+void loop() {
+  count++;
+}
 
 extern "C" {
+// Run loop() in a background
+   void vApplicationIdleHook(void) {
+    loop();
+  }
+
   int _putchar(char c) {
     return Serial.print(c);
   }
